@@ -17,8 +17,9 @@ if everything is working correctly.
 ## Troubleshooting
 If you are prompted for a password, the keys are not set up correctly.
 
-Try running `ssh -Tvvv git@git.chalmers.se` (more v's means more verbosity...) to trace the point of failure. 
+The ssh-key must have permissions -rw------ (ie. 600).
 
+Try running `ssh -Tvvv git@git.chalmers.se` (more v's means more verbosity...) to trace the point of failure. 
 
 If you have multiple keys in your `.ssh` then the ssh will try each of them in turn. If too many fail (four, I believe) the git server will reject any further keys and will ask for a password instead.
 
