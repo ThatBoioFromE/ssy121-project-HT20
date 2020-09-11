@@ -1,4 +1,3 @@
-
 # SSHing into the repository
 
 This is straightforward if you follow the following guide for generating an SSH keypair.
