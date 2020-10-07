@@ -2,7 +2,7 @@ close all
 clear
 
 %% Input parameters
-N = 10;    % Number of bits to transmit
+N = 3*34;    % Number of bits to transmit
 Rb = 440;   % bit rate [bit/sec]
 fs = 4400; % Sampling frequency [Sample/s]
 Ts = 1/fs; % Sample time [s/Sample]
@@ -14,7 +14,7 @@ rolloff = 0.4; % Roll-off factor (ie. alpha) for Raised Cosine pulse.
 %% Transmitter
 % Constellation
 constellation = [(1 + 1i), (1 - 1i), (-1 -1i), (-1 + 1i)]/sqrt(2);% Constellation 1 - QPSK/4-QAM
-%constellation = [sqrt(2), (1 + 1i), sqrt(2)*1i, (1 - 1i), -sqrt(2), (-1 -1i), -sqrt(2)*1i, (-1 + 1i)]/sqrt(2);  % 8-PAM
+%constellation = [sqrt(2), (1 + 1i), sqrt(2)*1i, (-1 + 1i), -sqrt(2), (-1 -1i), -sqrt(2)*1i, (1 - 1i)]/sqrt(2);  % 8-PAM
 
 % % Generate matrix of 16-QAM points.
 % order = 16  % Number of QAM constellation points.
@@ -103,14 +103,14 @@ grid on;
 
 
 %% Channel (AWGN)
-SNRdB = 100;
+SNRdB = 10;
 s_noisy = awgn(tx_sig, SNRdB, 'measured');
 figure; plot(real(s_noisy))
 title('Carrier signal with Noise')
 
 %% Receiver
 
-phzOffs = 2*pi/3;% Phase offset
+phzOffs = pi;% Phase offset
 rx_I =  s_noisy.*cos(2*pi*fc*t_s + phzOffs);
 rx_Q = -s_noisy.*sin(2*pi*fc*t_s + phzOffs);
 
