@@ -2,7 +2,7 @@ close all
 clear
 
 %% Input parameters
-N = 3*12;    % Number of bits to transmit
+N = 3*40;    % Number of bits to transmit
 Rb = 440;   % bit rate [bit/sec]
 fs = 4400; % Sampling frequency [Sample/s]
 Ts = 1/fs; % Sample time [s/Sample]
@@ -84,7 +84,7 @@ grid on;
 
 
 %% Channel (AWGN)
-SNRdB = -5;
+SNRdB = 1;
 s_noisy = awgn(tx_sig, SNRdB, 'measured');
 figure; plot(real(s_noisy))
 title('Carrier signal with Noise')
@@ -148,23 +148,18 @@ hold off
 % Unmapping to symbols
 samples = rx_symbs(:,1) + 1i.*rx_symbs(:,2);
 figure
+hold on
+voronoi(real(constellation), imag(constellation))
 plot(samples, 'o')
+hold off
 axis square; grid on
 xlim([-1 1]);
 ylim([-1 1]);
+title('Received samples');
 
-% Euclidean distances from each sample to each possible constellation point
-% (INEFFICIENT!)
-% d = zeros(length(rx_symbs), length(constellation))
-% for idx = 1:length(rx_symbs)
-%     for jdx = 1:length(constellation)
-%         d(idx, jdx) = norm(rx_symbs(idx) - constellation(jdx));
-%     end
-% end 
-
-d = abs(repmat(samples, 1, length(constellation)) - repmat(constellation, length(samples), 1)).^2;
-
-[nearest_val, nearest_idx] = min(d, [], 2);  % Get index of value with minimum distance to a constellation point. Traverse alone column.
+% Minimum euclidean distance. First 
+d = abs(repmat(samples, 1, length(constellation)) - repmat(constellation, length(samples), 1)).^2; % Compute distance of every sample symbol to every constellation point.
+[~, nearest_idx] = min(d, [], 2);  % Get index of value with minimum distance to a constellation point. Traverse along column.
 
 rx_mapped = constellation(nearest_idx); % Choose corresponding symbol.
 
@@ -177,6 +172,7 @@ plot( abs(corr) )
 grid on; title('Preamble detection');
 hold on
 plot(peak_idx, abs(corr(peak_idx)), 'or')
+hold off
 
 % Symbols to messages
 m_hat = rx_mapped(peak_idx+1:end); % Get symbols after preamble -> actual message.
