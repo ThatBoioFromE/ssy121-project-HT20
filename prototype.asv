@@ -2,7 +2,7 @@ close all
 clear
 
 %% Input parameters
-N = 3*12;    % Number of bits to transmit
+N = 3*40;    % Number of bits to transmit
 Rb = 440;   % bit rate [bit/sec]
 fs = 4400; % Sampling frequency [Sample/s]
 Ts = 1/fs; % Sample time [s/Sample]
@@ -14,7 +14,24 @@ rolloff = 0.4; % Roll-off factor (ie. alpha) for Raised Cosine pulse.
 %% Transmitter
 % Constellation
 %constellation = [(1 + 1i), (1 - 1i), (-1 -1i), (-1 + 1i)]/sqrt(2);% Constellation 1 - QPSK/4-QAM
-constellation = [sqrt(2), (1 + 1i), sqrt(2)*i, (1 - 1i), -sqrt(2), (-1 -1i), -sqrt(2)*i, (-1 + 1i)]/sqrt(2);  % 8-PAM
+%constellation = [sqrt(2), (1 + 1i), sqrt(2)*1i, (1 - 1i), -sqrt(2), (-1 -1i), -sqrt(2)*1i, (-1 + 1i)]/sqrt(2);  % 8-PAM
+constellation  = [sqrt(2)*exp(1i*(pi/2*(1:4)-pi/4)) sqrt(10)*exp(1i*(pi/4*(1:8)-pi/8)) ]
+scatterplot(constellation);
+hold on
+plot(sqrt(2)*cos(0:2*pi/40:2*pi), sqrt(2)*sin(0:2*pi/40:2*pi))
+plot(sqrt(10)*cos(0:2*pi/40:2*pi), sqrt(10)*sin(0:2*pi/40:2*pi))
+grid on
+
+order = 16
+d_min = 2;
+constx = 0:d_min:6
+constx = repmat(constx, 4,1)
+consty = 0:d_min:6
+consty = repmat(consty', 1, 4)
+const = constx+1i*consty
+plot(const, 'o')
+
+
 grid on;
 voronoi(real(constellation), imag(constellation))
 title('Constellation plot')
@@ -22,7 +39,7 @@ xlabel("Phase"); ylabel("Quadrature");
 
 
 % Preamble (including initial delay where nothing is tx'd)
-delay_time = randi([1,5], 1);       % Generate a random delay between 1 and 20 samples long.
+delay_time = randi([1,20], 1);       % Generate a random delay between 1 and 20 samples long.
 delay = zeros(1, delay_time);
 preamble = [1 1 1 1 1 -1 -1 1 1 -1 1 -1 1]; % length-13 Barker code
 preamble_symbs = preamble.*(1+1i)./sqrt(2); % Map preamble to symbols, so that they are 180deg apart! MUST BE MODIFIED IF USING DIFFERENT CONSTELLATION.
@@ -84,7 +101,7 @@ grid on;
 
 
 %% Channel (AWGN)
-SNRdB = -1;
+SNRdB = 1;
 s_noisy = awgn(tx_sig, SNRdB, 'measured');
 figure; plot(real(s_noisy))
 title('Carrier signal with Noise')
@@ -148,23 +165,18 @@ hold off
 % Unmapping to symbols
 samples = rx_symbs(:,1) + 1i.*rx_symbs(:,2);
 figure
+hold on
+voronoi(real(constellation), imag(constellation))
 plot(samples, 'o')
+hold off
 axis square; grid on
 xlim([-1 1]);
 ylim([-1 1]);
+title('Received samples');
 
-% Euclidean distances from each sample to each possible constellation point
-% (INEFFICIENT!)
-% d = zeros(length(rx_symbs), length(constellation))
-% for idx = 1:length(rx_symbs)
-%     for jdx = 1:length(constellation)
-%         d(idx, jdx) = norm(rx_symbs(idx) - constellation(jdx));
-%     end
-% end 
-
-d = abs(repmat(samples, 1, length(constellation)) - repmat(constellation, length(samples), 1)).^2;
-
-[nearest_val, nearest_idx] = min(d, [], 2);  % Get index of value with minimum distance to a constellation point. Traverse alone column.
+% Minimum euclidean distance. First 
+d = abs(repmat(samples, 1, length(constellation)) - repmat(constellation, length(samples), 1)).^2; % Compute distance of every sample symbol to every constellation point.
+[~, nearest_idx] = min(d, [], 2);  % Get index of value with minimum distance to a constellation point. Traverse along column.
 
 rx_mapped = constellation(nearest_idx); % Choose corresponding symbol.
 
@@ -177,10 +189,13 @@ plot( abs(corr) )
 grid on; title('Preamble detection');
 hold on
 plot(peak_idx, abs(corr(peak_idx)), 'or')
+hold off
 
 % Symbols to messages
-rx_message_symbs = rx_mapped(peak_idx+1:end); % Get symbols after preamble -> actual message.
-SER = symerr(message_symbs, rx_message_symbs) 
+m_hat = rx_mapped(peak_idx+1:end); % Get symbols after preamble -> actual message.
+SER = symerr(message_symbs, m_hat) 
 
-% 
-
+% Messages to bits
+b_hat_buffer = de2bi(nearest_idx(peak_idx+1:end)-1, bpsymb, 'left-msb')';
+b_hat = b_hat_buffer(:)'; %write as a vector
+BER = biterr(b, b_hat) %count of bit errors

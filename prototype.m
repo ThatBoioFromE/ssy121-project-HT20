@@ -14,7 +14,23 @@ rolloff = 0.4; % Roll-off factor (ie. alpha) for Raised Cosine pulse.
 %% Transmitter
 % Constellation
 %constellation = [(1 + 1i), (1 - 1i), (-1 -1i), (-1 + 1i)]/sqrt(2);% Constellation 1 - QPSK/4-QAM
-constellation = [sqrt(2), (1 + 1i), sqrt(2)*i, (1 - 1i), -sqrt(2), (-1 -1i), -sqrt(2)*i, (-1 + 1i)]/sqrt(2);  % 8-PAM
+constellation = [sqrt(2), (1 + 1i), sqrt(2)*1i, (1 - 1i), -sqrt(2), (-1 -1i), -sqrt(2)*1i, (-1 + 1i)]/sqrt(2);  % 8-PAM
+
+% % generate matrix of 16-QAM points.
+% order = 16  % Number of QAM constellation points.
+% d_min = 2;  % Minimum distance between symbols.
+% constx = 0:d_min:(sqrt(order)-1)*d_min
+% constx = repmat(constx, sqrt(order),1)
+% consty = 0:d_min:(sqrt(order)-1)*d_min
+% consty = repmat(consty', 1, sqrt(order))
+% const = constx+1i*consty % Make each point into complex number.
+% const = const - (3+3i); % Translate matrix to center on origin.
+% % Next step: organise constellation matrix elements into vector sorted in
+% % gray sequence.
+% plot(const, 'ob')
+% grid on
+
+
 grid on;
 voronoi(real(constellation), imag(constellation))
 title('Constellation plot')
@@ -22,7 +38,7 @@ xlabel("Phase"); ylabel("Quadrature");
 
 
 % Preamble (including initial delay where nothing is tx'd)
-delay_time = randi([1,5], 1);       % Generate a random delay between 1 and 20 samples long.
+delay_time = randi([1,20], 1);       % Generate a random delay between 1 and 20 samples long.
 delay = zeros(1, delay_time);
 preamble = [1 1 1 1 1 -1 -1 1 1 -1 1 -1 1]; % length-13 Barker code
 preamble_symbs = preamble.*(1+1i)./sqrt(2); % Map preamble to symbols, so that they are 180deg apart! MUST BE MODIFIED IF USING DIFFERENT CONSTELLATION.
