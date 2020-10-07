@@ -2,7 +2,7 @@ close all
 clear
 
 %% Input parameters
-N = 3*40;    % Number of bits to transmit
+N = 10;    % Number of bits to transmit
 Rb = 440;   % bit rate [bit/sec]
 fs = 4400; % Sampling frequency [Sample/s]
 Ts = 1/fs; % Sample time [s/Sample]
@@ -13,24 +13,26 @@ rolloff = 0.4; % Roll-off factor (ie. alpha) for Raised Cosine pulse.
 
 %% Transmitter
 % Constellation
-%constellation = [(1 + 1i), (1 - 1i), (-1 -1i), (-1 + 1i)]/sqrt(2);% Constellation 1 - QPSK/4-QAM
+constellation = [(1 + 1i), (1 - 1i), (-1 -1i), (-1 + 1i)]/sqrt(2);% Constellation 1 - QPSK/4-QAM
 %constellation = [sqrt(2), (1 + 1i), sqrt(2)*1i, (1 - 1i), -sqrt(2), (-1 -1i), -sqrt(2)*1i, (-1 + 1i)]/sqrt(2);  % 8-PAM
-constellation  = [sqrt(2)*exp(1i*(pi/2*(1:4)-pi/4)) sqrt(10)*exp(1i*(pi/4*(1:8)-pi/8)) ]
-scatterplot(constellation);
-hold on
-plot(sqrt(2)*cos(0:2*pi/40:2*pi), sqrt(2)*sin(0:2*pi/40:2*pi))
-plot(sqrt(10)*cos(0:2*pi/40:2*pi), sqrt(10)*sin(0:2*pi/40:2*pi))
-grid on
 
-order = 16
-d_min = 2;
-constx = 0:d_min:6
-constx = repmat(constx, 4,1)
-consty = 0:d_min:6
-consty = repmat(consty', 1, 4)
-const = constx+1i*consty
-plot(const, 'o')
-
+% % Generate matrix of 16-QAM points.
+% order = 16  % Number of QAM constellation points.
+% d_min = 2;  % Minimum distance between symbols.
+% constx = 0:d_min:(sqrt(order)-1)*d_min
+% constx = repmat(constx, sqrt(order),1)
+% consty = 0:d_min:(sqrt(order)-1)*d_min
+% consty = repmat(consty', 1, sqrt(order))
+% const = constx+1i*consty % Make each point into complex number.
+% const = const - (3+3i); % Translate matrix to center on origin.
+% % Next step: organise constellation matrix elements into vector sorted in
+% % gray sequence.
+% plot(const, 'ob')
+% grid on
+% 
+% constellation = reshape(const, [1 16])
+% plot(const, 'ob')
+% grid on
 
 grid on;
 voronoi(real(constellation), imag(constellation))
@@ -58,7 +60,7 @@ m_idx = bi2de(m, 'left-msb')'+1; % Bits to symbol index, msb: the Most Significa
 
 % Message to symbol
 message_symbs = constellation(m_idx);    % Map messages to constellation symbols using indices
-%symbs = [delay preamble_symbs symbs]; % Prepend variable delay and preamble to message.
+%symbs = [delay preamble_symbs ]; % Prepend variable delay and preamble to message.
 symbs = [delay preamble_symbs message_symbs]; % ONLY TRANSMIT PREAMBLE FOR NOW!
 
 
@@ -101,14 +103,16 @@ grid on;
 
 
 %% Channel (AWGN)
-SNRdB = 1;
+SNRdB = 100;
 s_noisy = awgn(tx_sig, SNRdB, 'measured');
 figure; plot(real(s_noisy))
 title('Carrier signal with Noise')
 
 %% Receiver
-rx_I =  s_noisy.*cos(2*pi*fc*t_s);
-rx_Q = -s_noisy.*sin(2*pi*fc*t_s);
+
+phzOffs = pi/7;% Phase offset
+rx_I =  s_noisy.*cos(2*pi*fc*t_s + phzOffs);
+rx_Q = -s_noisy.*sin(2*pi*fc*t_s + phzOffs);
 
 figure
 subplot(121)
@@ -118,8 +122,9 @@ subplot(122)
 plot(t_s, rx_Q)
 title('RX-Q, mixed')
 
-rx_I_filtered = lowpass(rx_I, fc/2, fs, 'ImpulseResponse','iir','Steepness',0.85);
-rx_Q_filtered = lowpass(rx_Q, fc/2, fs, 'ImpulseResponse','iir','Steepness',0.85);
+% Lowpass filter to give baseband signal.
+rx_I_filtered = lowpass(rx_I, Rsymb, fs, 'ImpulseResponse','iir','Steepness',0.75);
+rx_Q_filtered = lowpass(rx_Q, Rsymb, fs, 'ImpulseResponse','iir','Steepness',0.75);
 
 figure
 subplot(121)
@@ -174,7 +179,7 @@ xlim([-1 1]);
 ylim([-1 1]);
 title('Received samples');
 
-% Minimum euclidean distance. First 
+% Minimum euclidean distance. Unmap symbols to messages
 d = abs(repmat(samples, 1, length(constellation)) - repmat(constellation, length(samples), 1)).^2; % Compute distance of every sample symbol to every constellation point.
 [~, nearest_idx] = min(d, [], 2);  % Get index of value with minimum distance to a constellation point. Traverse along column.
 
@@ -184,8 +189,30 @@ rx_mapped = constellation(nearest_idx); % Choose corresponding symbol.
 corr = conv(rx_mapped, fliplr(preamble)); % Compare preamble to received symbol vector. Peak at end of preamble.
 [~,peak_idx] = max(corr);
 
+
+
+sample_corr = conv(samples, fliplr(preamble));
+[~,peak_idx] = max(sample_corr);
 figure
-plot( abs(corr) )
+subplot(311)
+plot(abs(sample_corr))
+grid on
+subplot(312)
+plot( real(sample_corr) )
+grid on
+subplot(313)
+plot(imag(sample_corr))
+grid on
+
+% Attempt to use preamble to find phase errors/ambiguities.
+% eg. if there is a phase error of 90deg, there will be a correlation, but
+% negative in one of the I/Q streams.
+phzError = atan(imag(sample_corr(peak_idx))/real(sample_corr(peak_idx)))-pi/4
+rx_mapped_phzCorrected = rx_mapped.*exp(1i*phzError); 
+
+scatterplot(rx_mapped); title('Phase-corrected rx')
+
+
 grid on; title('Preamble detection');
 hold on
 plot(peak_idx, abs(corr(peak_idx)), 'or')

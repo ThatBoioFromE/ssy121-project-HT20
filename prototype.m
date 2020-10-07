@@ -2,7 +2,7 @@ close all
 clear
 
 %% Input parameters
-N = 3*40;    % Number of bits to transmit
+N = 10;    % Number of bits to transmit
 Rb = 440;   % bit rate [bit/sec]
 fs = 4400; % Sampling frequency [Sample/s]
 Ts = 1/fs; % Sample time [s/Sample]
@@ -13,10 +13,10 @@ rolloff = 0.4; % Roll-off factor (ie. alpha) for Raised Cosine pulse.
 
 %% Transmitter
 % Constellation
-%constellation = [(1 + 1i), (1 - 1i), (-1 -1i), (-1 + 1i)]/sqrt(2);% Constellation 1 - QPSK/4-QAM
-constellation = [sqrt(2), (1 + 1i), sqrt(2)*1i, (1 - 1i), -sqrt(2), (-1 -1i), -sqrt(2)*1i, (-1 + 1i)]/sqrt(2);  % 8-PAM
+constellation = [(1 + 1i), (1 - 1i), (-1 -1i), (-1 + 1i)]/sqrt(2);% Constellation 1 - QPSK/4-QAM
+%constellation = [sqrt(2), (1 + 1i), sqrt(2)*1i, (1 - 1i), -sqrt(2), (-1 -1i), -sqrt(2)*1i, (-1 + 1i)]/sqrt(2);  % 8-PAM
 
-% % generate matrix of 16-QAM points.
+% % Generate matrix of 16-QAM points.
 % order = 16  % Number of QAM constellation points.
 % d_min = 2;  % Minimum distance between symbols.
 % constx = 0:d_min:(sqrt(order)-1)*d_min
@@ -29,7 +29,10 @@ constellation = [sqrt(2), (1 + 1i), sqrt(2)*1i, (1 - 1i), -sqrt(2), (-1 -1i), -s
 % % gray sequence.
 % plot(const, 'ob')
 % grid on
-
+% 
+% constellation = reshape(const, [1 16])
+% plot(const, 'ob')
+% grid on
 
 grid on;
 voronoi(real(constellation), imag(constellation))
@@ -57,7 +60,7 @@ m_idx = bi2de(m, 'left-msb')'+1; % Bits to symbol index, msb: the Most Significa
 
 % Message to symbol
 message_symbs = constellation(m_idx);    % Map messages to constellation symbols using indices
-%symbs = [delay preamble_symbs symbs]; % Prepend variable delay and preamble to message.
+%symbs = [delay preamble_symbs ]; % Prepend variable delay and preamble to message.
 symbs = [delay preamble_symbs message_symbs]; % ONLY TRANSMIT PREAMBLE FOR NOW!
 
 
@@ -100,14 +103,16 @@ grid on;
 
 
 %% Channel (AWGN)
-SNRdB = 1;
+SNRdB = 100;
 s_noisy = awgn(tx_sig, SNRdB, 'measured');
 figure; plot(real(s_noisy))
 title('Carrier signal with Noise')
 
 %% Receiver
-rx_I =  s_noisy.*cos(2*pi*fc*t_s);
-rx_Q = -s_noisy.*sin(2*pi*fc*t_s);
+
+phzOffs = 2*pi/3;% Phase offset
+rx_I =  s_noisy.*cos(2*pi*fc*t_s + phzOffs);
+rx_Q = -s_noisy.*sin(2*pi*fc*t_s + phzOffs);
 
 figure
 subplot(121)
@@ -117,8 +122,9 @@ subplot(122)
 plot(t_s, rx_Q)
 title('RX-Q, mixed')
 
-rx_I_filtered = lowpass(rx_I, fc/2, fs, 'ImpulseResponse','iir','Steepness',0.85);
-rx_Q_filtered = lowpass(rx_Q, fc/2, fs, 'ImpulseResponse','iir','Steepness',0.85);
+% Lowpass filter to give baseband signal.
+rx_I_filtered = lowpass(rx_I, Rsymb, fs, 'ImpulseResponse','iir','Steepness',0.75);
+rx_Q_filtered = lowpass(rx_Q, Rsymb, fs, 'ImpulseResponse','iir','Steepness',0.75);
 
 figure
 subplot(121)
@@ -173,22 +179,40 @@ xlim([-1 1]);
 ylim([-1 1]);
 title('Received samples');
 
-% Minimum euclidean distance. First 
-d = abs(repmat(samples, 1, length(constellation)) - repmat(constellation, length(samples), 1)).^2; % Compute distance of every sample symbol to every constellation point.
+% Preamble correlation
+sample_corr = conv(samples, fliplr(preamble));
+[~,peak_idx] = max(sample_corr);
+figure
+subplot(311)
+plot(abs(sample_corr))
+hold on; plot(peak_idx, abs(sample_corr(peak_idx)), 'or')
+grid on
+subplot(312)
+plot( real(sample_corr) )
+grid on
+subplot(313)
+plot(imag(sample_corr))
+grid on
+
+% Attempt to use preamble to find phase errors/ambiguities.
+% eg. if there is a phase error of 90deg, there will be a correlation, but
+% negative in one of the I/Q streams.
+phzError = angle(sample_corr(peak_idx))-pi/4
+samples_phzCorrected = samples.*exp(1i*-phzError); 
+
+scatterplot(samples_phzCorrected); title('Phase-corrected rx')
+
+% Minimum euclidean distance. Unmap symbols to messages
+d = abs(repmat(samples_phzCorrected, 1, length(constellation)) - repmat(constellation, length(samples), 1)).^2; % Compute distance of every sample symbol to every constellation point.
 [~, nearest_idx] = min(d, [], 2);  % Get index of value with minimum distance to a constellation point. Traverse along column.
 
 rx_mapped = constellation(nearest_idx); % Choose corresponding symbol.
 
 % Preamble detection
-corr = conv(rx_mapped, fliplr(preamble)); % Compare preamble to received symbol vector. Peak at end of preamble.
-[~,peak_idx] = max(corr);
+%corr = conv(rx_mapped, fliplr(preamble)); % Compare preamble to received symbol vector. Peak at end of preamble.
+%[~,peak_idx] = max(corr);
 
-figure
-plot( abs(corr) )
-grid on; title('Preamble detection');
-hold on
-plot(peak_idx, abs(corr(peak_idx)), 'or')
-hold off
+
 
 % Symbols to messages
 m_hat = rx_mapped(peak_idx+1:end); % Get symbols after preamble -> actual message.
