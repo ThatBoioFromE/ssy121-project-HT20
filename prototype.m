@@ -13,27 +13,12 @@ rolloff = 0.4; % Roll-off factor (ie. alpha) for Raised Cosine pulse.
 
 %% Transmitter
 %% Constellation (normalized to unit energy E=d^2)
-%constellation = [1 -1]; % BPSK
-%constellation = [(1 + 1i), (1 - 1i), (-1 -1i), (-1 + 1i)]/sqrt(2);% Constellation 1 - QPSK/4-QAM
-constellation = [sqrt(2), (1 + 1i), sqrt(2)*1i, (-1 + 1i), -sqrt(2), (-1 -1i), -sqrt(2)*1i, (1 - 1i)]/sqrt(2);  % 8-PAM
-
-% % Generate matrix of 16-QAM points.
-% order = 16  % Number of QAM constellation points.
-% d_min = 2;  % Minimum distance between symbols.
-% constx = 0:d_min:(sqrt(order)-1)*d_min
-% constx = repmat(constx, sqrt(order),1)
-% consty = 0:d_min:(sqrt(order)-1)*d_min
-% consty = repmat(consty', 1, sqrt(order))
-% const = constx+1i*consty % Make each point into complex number.
-% const = const - (3+3i); % Translate matrix to center on origin.
-% % Next step: organise constellation matrix elements into vector sorted in
-% % gray sequence.
-% plot(const, 'ob')
-% grid on
-% 
-% constellation = reshape(const, [1 16])
-% plot(const, 'ob')
-% grid on
+% Implemented constellations:
+% 'BPSK'
+% '4-QAM'
+% '8-PSK'
+% '16-QAM'
+constellation = generateConstellation('8-PSK');
 
 grid on;
 if length(constellation)>2 % Voronoi need at least 3 constellation points.
@@ -228,6 +213,10 @@ plot(samples_phzCorrected, 'ob'); title('Phase-corrected rx. Decision regions ov
 if length(constellation)>2
     voronoi(real(constellation), imag(constellation))
 end
+plot(real(constellation), imag(constellation), 'or')
+grid on; axis square;
+xlim([-2 2]);
+ylim([-2 2]);
 hold off
 
 % Minimum euclidean distance. Unmap symbols to messages
@@ -252,5 +241,5 @@ b_hat = b_hat_buffer(:)'; %write as a vector
 BER = biterr(b, b_hat) %count of bit errors
 
 b_hat_trunc = b_hat(1:end-rem(length(b_hat), 7)); % Truncate received bitstream so that it's divisible by 7 (ASCII length).
-disp(['Received message: ' bitStream2string(b_hat_trunc)])
+disp(['Received message (quote marks added): "' bitStream2string(b_hat_trunc) '"'])
 
