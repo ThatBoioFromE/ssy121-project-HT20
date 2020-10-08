@@ -13,8 +13,8 @@ rolloff = 0.4; % Roll-off factor (ie. alpha) for Raised Cosine pulse.
 
 %% Transmitter
 % Constellation
-%constellation = [(1 + 1i), (1 - 1i), (-1 -1i), (-1 + 1i)]/sqrt(2);% Constellation 1 - QPSK/4-QAM
-constellation = [sqrt(2), (1 + 1i), sqrt(2)*1i, (-1 + 1i), -sqrt(2), (-1 -1i), -sqrt(2)*1i, (1 - 1i)]/sqrt(2);  % 8-PAM
+constellation = [(1 + 1i), (1 - 1i), (-1 -1i), (-1 + 1i)]/sqrt(2);% Constellation 1 - QPSK/4-QAM
+%constellation = [sqrt(2), (1 + 1i), sqrt(2)*1i, (-1 + 1i), -sqrt(2), (-1 -1i), -sqrt(2)*1i, (1 - 1i)]/sqrt(2);  % 8-PAM
 
 % % Generate matrix of 16-QAM points.
 % order = 16  % Number of QAM constellation points.
@@ -43,17 +43,11 @@ xlabel("Phase"); ylabel("Quadrature");
 % Preamble (including initial delay where nothing is tx'd)
 delay_time = randi([1,20], 1);       % Generate a random delay between 1 and 20 samples long.
 delay = zeros(1, delay_time);
-%preamble = [1 1 1 1 1 -1 -1 1 1 -1 1 -1 1]; % Barker-13
-preamble = [1 1 1 -1 -1 1 -1]; % Barker-7
+preamble = [1 1 1 1 1 -1 -1 1 1 -1 1 -1 1]; % length-13 Barker code
 preamble_symbs = preamble.*(1+1i)./sqrt(2); % Map preamble to symbols, so that they are 180deg apart! MUST BE MODIFIED IF USING DIFFERENT CONSTELLATION.
 
-%% Data source
-% b = randsrc(1,N,[0 1]); % Random message bits.
-string = 'supercalifragilisticexpialidocious';
-b = string2bitStream(string);
-b = [b zeros(1, 432-length(b))] % Pad string with zeros to fill length 432 packet.
-disp(['Sent message: ' string])
-%disp(['Bitstream length is: ' length(b)])
+% Data source
+b = randsrc(1,N,[0 1]); % Message bits
 
 % Bits to Messages
 M = length(constellation);      % M unique messages/symbols.
@@ -109,14 +103,14 @@ grid on;
 
 
 %% Channel (AWGN)
-SNRdB = 10;
+SNRdB = 100;
 s_noisy = awgn(tx_sig, SNRdB, 'measured');
 figure; plot(real(s_noisy))
 title('Carrier signal with Noise')
 
 %% Receiver
 
-phzOffs = 2*pi/7;% Phase offset
+phzOffs = pi;% Phase offset
 rx_I =  s_noisy.*cos(2*pi*fc*t_s + phzOffs);
 rx_Q = -s_noisy.*sin(2*pi*fc*t_s + phzOffs);
 
@@ -228,7 +222,3 @@ SER = symerr(message_symbs, m_hat)
 b_hat_buffer = de2bi(nearest_idx(peak_idx+1:end)-1, bpsymb, 'left-msb')';
 b_hat = b_hat_buffer(:)'; %write as a vector
 BER = biterr(b, b_hat) %count of bit errors
-
-b_hat_trunc = b_hat(1:end-rem(length(b_hat), 7)); % Truncate received bitstream so that it's divisible by 7 (ASCII length).
-disp(['Received message: ' bitStream2string(b_hat_trunc)])
-

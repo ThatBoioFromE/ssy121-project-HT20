@@ -1,0 +1,12 @@
+function b = string2bitStream(string)
+
+string = 'supercalifragilisticexpialidocious';
+
+% Convert string chars into col-vector of binary strings.
+bin_array = dec2bin(string, 7);
+
+% Transpose array (due to the way matrix elements are enumerated).
+% Reshape into row-vector. 
+% '[]' lets 'reshape' automatically calculate row size.
+b = reshape(bin_array', 1, [])
+
