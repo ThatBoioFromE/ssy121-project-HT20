@@ -12,7 +12,8 @@ span = 6;   % Pulse-width in symbol times.
 rolloff = 0.4; % Roll-off factor (ie. alpha) for Raised Cosine pulse.
 
 %% Transmitter
-% Constellation
+%% Constellation
+%constellation = [1 -1]; % BPSK
 constellation = [(1 + 1i), (1 - 1i), (-1 -1i), (-1 + 1i)]/sqrt(2);% Constellation 1 - QPSK/4-QAM
 %constellation = [sqrt(2), (1 + 1i), sqrt(2)*1i, (-1 + 1i), -sqrt(2), (-1 -1i), -sqrt(2)*1i, (1 - 1i)]/sqrt(2);  % 8-PAM
 
@@ -35,7 +36,9 @@ constellation = [(1 + 1i), (1 - 1i), (-1 -1i), (-1 + 1i)]/sqrt(2);% Constellatio
 % grid on
 
 grid on;
-voronoi(real(constellation), imag(constellation))
+if length(constellation)>2 % Voronoi need at least 3 constellation points.
+    voronoi(real(constellation), imag(constellation))
+end
 title('Constellation plot')
 xlabel("Phase"); ylabel("Quadrature");
 
@@ -43,13 +46,21 @@ xlabel("Phase"); ylabel("Quadrature");
 % Preamble (including initial delay where nothing is tx'd)
 delay_time = randi([1,20], 1);       % Generate a random delay between 1 and 20 samples long.
 delay = zeros(1, delay_time);
-preamble = [1 1 1 1 1 -1 -1 1 1 -1 1 -1 1]; % length-13 Barker code
-preamble_symbs = preamble.*(1+1i)./sqrt(2); % Map preamble to symbols, so that they are 180deg apart! MUST BE MODIFIED IF USING DIFFERENT CONSTELLATION.
+preamble = [1 1 1 1 1 -1 -1 1 1 -1 1 -1 1]; % Barker-13
+%preamble = [1 1 1 -1 -1 1 -1]; % Barker-7
 
-% Data source
-b = randsrc(1,N,[0 1]); % Message bits
+%preamble_symbs = preamble.*(1+1i)./sqrt(2); % Map preamble to symbols, so that they are 180deg apart! MUST BE MODIFIED IF USING DIFFERENT CONSTELLATION.
+preamble_symbs = preamble./sqrt(2); % Do NOT match with valid symbols
 
-% Bits to Messages
+%% Data source
+% b = randsrc(1,N,[0 1]); % Random message bits.
+
+string = 'supercalifragilisticexpialidocious';
+b = string2bitStream(string);
+b = [b zeros(1, 432-length(b))]; % Pad string with zeros to fill length 432 packet.
+disp(['Sent message: ' string])
+
+%% Bits to Messages
 M = length(constellation);      % M unique messages/symbols.
 bpsymb = log2(M);       % Bits per symbol
 Rsymb = Rb/bpsymb;
@@ -69,11 +80,14 @@ symbs = [delay preamble_symbs message_symbs]; % ONLY TRANSMIT PREAMBLE FOR NOW!
 figure
 plot(t, pulse); grid on; title('Basic pulse');
 
-% Pulse-modulation
+% Pulse-modulation -> create baseband signal
 sps = fix(sps); % Convert explicitly to integer !!UGLY HACK!!
 x_upsample = upsample(symbs, sps); % Upsample to fs.
 s = conv(pulse, x_upsample); % Pulse shaping the symbol-train by convolving with basis pulse.
 t_s = (0:length(s)-1).*Ts; % Signal time-axis ie. x[n]*n*Ts.
+
+% Normalize baseband amplitude (because pulse-convolution attenuates signal).
+s = s.*
 
 figure
 subplot(221) 
@@ -103,14 +117,14 @@ grid on;
 
 
 %% Channel (AWGN)
-SNRdB = 100;
+SNRdB = 10;
 s_noisy = awgn(tx_sig, SNRdB, 'measured');
 figure; plot(real(s_noisy))
 title('Carrier signal with Noise')
 
 %% Receiver
 
-phzOffs = pi;% Phase offset
+phzOffs = 2*pi/7;% Phase offset
 rx_I =  s_noisy.*cos(2*pi*fc*t_s + phzOffs);
 rx_Q = -s_noisy.*sin(2*pi*fc*t_s + phzOffs);
 
@@ -171,7 +185,9 @@ hold off
 samples = rx_symbs(:,1) + 1i.*rx_symbs(:,2);
 figure
 hold on
-voronoi(real(constellation), imag(constellation))
+if length(constellation)>2
+    voronoi(real(constellation), imag(constellation))
+end
 plot(samples, 'o')
 hold off
 axis square; grid on
@@ -197,7 +213,7 @@ grid on
 % Attempt to use preamble to find phase errors/ambiguities.
 % eg. if there is a phase error of 90deg, there will be a correlation, but
 % negative in one of the I/Q streams.
-phzError = angle(sample_corr(peak_idx))-pi/4
+phzError = angle(sample_corr(peak_idx))%-pi/4 % Offset by nominal phase of preamble.
 samples_phzCorrected = samples.*exp(1i*-phzError); 
 
 scatterplot(samples_phzCorrected); title('Phase-corrected rx')
@@ -222,3 +238,7 @@ SER = symerr(message_symbs, m_hat)
 b_hat_buffer = de2bi(nearest_idx(peak_idx+1:end)-1, bpsymb, 'left-msb')';
 b_hat = b_hat_buffer(:)'; %write as a vector
 BER = biterr(b, b_hat) %count of bit errors
+
+b_hat_trunc = b_hat(1:end-rem(length(b_hat), 7)); % Truncate received bitstream so that it's divisible by 7 (ASCII length).
+disp(['Received message: ' bitStream2string(b_hat_trunc)])
+

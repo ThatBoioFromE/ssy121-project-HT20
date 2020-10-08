@@ -2,7 +2,7 @@ close all
 clear
 
 %% Input parameters
-N = 3*34;    % Number of bits to transmit
+N = 432;    % Number of bits to transmit
 Rb = 440;   % bit rate [bit/sec]
 fs = 4400; % Sampling frequency [Sample/s]
 Ts = 1/fs; % Sample time [s/Sample]
@@ -12,9 +12,10 @@ span = 6;   % Pulse-width in symbol times.
 rolloff = 0.4; % Roll-off factor (ie. alpha) for Raised Cosine pulse.
 
 %% Transmitter
-% Constellation
-%constellation = [(1 + 1i), (1 - 1i), (-1 -1i), (-1 + 1i)]/sqrt(2);% Constellation 1 - QPSK/4-QAM
-constellation = [sqrt(2), (1 + 1i), sqrt(2)*1i, (-1 + 1i), -sqrt(2), (-1 -1i), -sqrt(2)*1i, (1 - 1i)]/sqrt(2);  % 8-PAM
+%% Constellation
+%constellation = [1 -1]; % BPSK
+constellation = [(1 + 1i), (1 - 1i), (-1 -1i), (-1 + 1i)]/sqrt(2);% Constellation 1 - QPSK/4-QAM
+%constellation = [sqrt(2), (1 + 1i), sqrt(2)*1i, (-1 + 1i), -sqrt(2), (-1 -1i), -sqrt(2)*1i, (1 - 1i)]/sqrt(2);  % 8-PAM
 
 % % Generate matrix of 16-QAM points.
 % order = 16  % Number of QAM constellation points.
@@ -35,7 +36,9 @@ constellation = [sqrt(2), (1 + 1i), sqrt(2)*1i, (-1 + 1i), -sqrt(2), (-1 -1i), -
 % grid on
 
 grid on;
-voronoi(real(constellation), imag(constellation))
+if length(constellation)>2 % Voronoi need at least 3 constellation points.
+    voronoi(real(constellation), imag(constellation))
+end
 title('Constellation plot')
 xlabel("Phase"); ylabel("Quadrature");
 
@@ -43,19 +46,21 @@ xlabel("Phase"); ylabel("Quadrature");
 % Preamble (including initial delay where nothing is tx'd)
 delay_time = randi([1,20], 1);       % Generate a random delay between 1 and 20 samples long.
 delay = zeros(1, delay_time);
-%preamble = [1 1 1 1 1 -1 -1 1 1 -1 1 -1 1]; % Barker-13
-preamble = [1 1 1 -1 -1 1 -1]; % Barker-7
-preamble_symbs = preamble.*(1+1i)./sqrt(2); % Map preamble to symbols, so that they are 180deg apart! MUST BE MODIFIED IF USING DIFFERENT CONSTELLATION.
+preamble = [1 1 1 1 1 -1 -1 1 1 -1 1 -1 1]; % Barker-13
+%preamble = [1 1 1 -1 -1 1 -1]; % Barker-7
+
+%preamble_symbs = preamble.*(1+1i)./sqrt(2); % Map preamble to symbols, so that they are 180deg apart! MUST BE MODIFIED IF USING DIFFERENT CONSTELLATION.
+preamble_symbs = preamble./sqrt(2); % Do NOT match with valid symbols
 
 %% Data source
 % b = randsrc(1,N,[0 1]); % Random message bits.
+
 string = 'supercalifragilisticexpialidocious';
 b = string2bitStream(string);
-b = [b zeros(1, 432-length(b))] % Pad string with zeros to fill length 432 packet.
+b = [b zeros(1, 432-length(b))]; % Pad string with zeros to fill length 432 packet.
 disp(['Sent message: ' string])
-%disp(['Bitstream length is: ' length(b)])
 
-% Bits to Messages
+%% Bits to Messages
 M = length(constellation);      % M unique messages/symbols.
 bpsymb = log2(M);       % Bits per symbol
 Rsymb = Rb/bpsymb;
@@ -75,11 +80,16 @@ symbs = [delay preamble_symbs message_symbs]; % ONLY TRANSMIT PREAMBLE FOR NOW!
 figure
 plot(t, pulse); grid on; title('Basic pulse');
 
-% Pulse-modulation
+% Pulse-modulation -> create baseband signal
 sps = fix(sps); % Convert explicitly to integer !!UGLY HACK!!
 x_upsample = upsample(symbs, sps); % Upsample to fs.
 s = conv(pulse, x_upsample); % Pulse shaping the symbol-train by convolving with basis pulse.
 t_s = (0:length(s)-1).*Ts; % Signal time-axis ie. x[n]*n*Ts.
+
+% Normalize baseband amplitude to sqrt(2) (because pulse-convolution attenuates signal).
+s = s.*(sqrt(2)/find_largest_magnitude(real(s)))
+scatterplot(s)
+
 
 figure
 subplot(221) 
@@ -177,7 +187,9 @@ hold off
 samples = rx_symbs(:,1) + 1i.*rx_symbs(:,2);
 figure
 hold on
-voronoi(real(constellation), imag(constellation))
+if length(constellation)>2
+    voronoi(real(constellation), imag(constellation))
+end
 plot(samples, 'o')
 hold off
 axis square; grid on
@@ -203,7 +215,7 @@ grid on
 % Attempt to use preamble to find phase errors/ambiguities.
 % eg. if there is a phase error of 90deg, there will be a correlation, but
 % negative in one of the I/Q streams.
-phzError = angle(sample_corr(peak_idx))-pi/4
+phzError = angle(sample_corr(peak_idx))%-pi/4 % Offset by nominal phase of preamble.
 samples_phzCorrected = samples.*exp(1i*-phzError); 
 
 scatterplot(samples_phzCorrected); title('Phase-corrected rx')
