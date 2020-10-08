@@ -31,7 +31,7 @@ function audioTimerFcn(recObj, event, handles)
         % get current audio data
         rec_data = getaudiodata(recObj);
         % plot the audio data
-        figure(1); clf;plot(rec_data);
+        %figure(1); clf;plot(rec_data);
         %Test the difference between pause, stop, or resume the recObj: "pause(recObj)","stop(recObj)", "resume(recObj)"
 %         pause(recObj);
 %         resume(recObj);
@@ -39,6 +39,10 @@ function audioTimerFcn(recObj, event, handles)
 %         stop(recObj);
 %         resume(recObj);
 %         figure(1); clf;plot(rec_data);
+        if recObj.UserData.counter == 2
+            stop(recObj);
+            return;
+        end
 
     elseif recObj.UserData.counter == 10
         resume(recObj);
