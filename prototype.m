@@ -12,10 +12,10 @@ span = 6;   % Pulse-width in symbol times.
 rolloff = 0.4; % Roll-off factor (ie. alpha) for Raised Cosine pulse.
 
 %% Transmitter
-%% Constellation
+%% Constellation (normalized to unit energy E=d^2)
 %constellation = [1 -1]; % BPSK
-constellation = [(1 + 1i), (1 - 1i), (-1 -1i), (-1 + 1i)]/sqrt(2);% Constellation 1 - QPSK/4-QAM
-%constellation = [sqrt(2), (1 + 1i), sqrt(2)*1i, (-1 + 1i), -sqrt(2), (-1 -1i), -sqrt(2)*1i, (1 - 1i)]/sqrt(2);  % 8-PAM
+%constellation = [(1 + 1i), (1 - 1i), (-1 -1i), (-1 + 1i)]/sqrt(2);% Constellation 1 - QPSK/4-QAM
+constellation = [sqrt(2), (1 + 1i), sqrt(2)*1i, (-1 + 1i), -sqrt(2), (-1 -1i), -sqrt(2)*1i, (1 - 1i)]/sqrt(2);  % 8-PAM
 
 % % Generate matrix of 16-QAM points.
 % order = 16  % Number of QAM constellation points.
@@ -50,12 +50,12 @@ preamble = [1 1 1 1 1 -1 -1 1 1 -1 1 -1 1]; % Barker-13
 %preamble = [1 1 1 -1 -1 1 -1]; % Barker-7
 
 %preamble_symbs = preamble.*(1+1i)./sqrt(2); % Map preamble to symbols, so that they are 180deg apart! MUST BE MODIFIED IF USING DIFFERENT CONSTELLATION.
-preamble_symbs = preamble./sqrt(2); % Do NOT match with valid symbols
+preamble_symbs = preamble; % Do NOT need to map to valid symbols
 
 %% Data source
 % b = randsrc(1,N,[0 1]); % Random message bits.
 
-string = 'supercalifragilisticexpialidocious';
+string = 'SSY121 Group 7 says: The Capital Of Hawaii Is Honolulu.';
 b = string2bitStream(string);
 b = [b zeros(1, 432-length(b))]; % Pad string with zeros to fill length 432 packet.
 disp(['Sent message: ' string])
@@ -72,7 +72,7 @@ m_idx = bi2de(m, 'left-msb')'+1; % Bits to symbol index, msb: the Most Significa
 % Message to symbol
 message_symbs = constellation(m_idx);    % Map messages to constellation symbols using indices
 %symbs = [delay preamble_symbs ]; % Prepend variable delay and preamble to message.
-symbs = [delay preamble_symbs message_symbs]; % ONLY TRANSMIT PREAMBLE FOR NOW!
+symbs = [delay preamble_symbs message_symbs];
 
 
 % Generate basic pulse
@@ -87,7 +87,7 @@ s = conv(pulse, x_upsample); % Pulse shaping the symbol-train by convolving with
 t_s = (0:length(s)-1).*Ts; % Signal time-axis ie. x[n]*n*Ts.
 
 % Normalize baseband amplitude to sqrt(2) (because pulse-convolution attenuates signal).
-s = s.*(sqrt(2)/find_largest_magnitude(real(s)))
+s = s.*(sqrt(2)/find_largest_magnitude(real(s)));
 scatterplot(s)
 
 
@@ -193,8 +193,8 @@ end
 plot(samples, 'o')
 hold off
 axis square; grid on
-xlim([-1 1]);
-ylim([-1 1]);
+% xlim([-1 1]);
+% ylim([-1 1]);
 title('Received samples');
 
 % Preamble correlation
@@ -218,7 +218,17 @@ grid on
 phzError = angle(sample_corr(peak_idx))%-pi/4 % Offset by nominal phase of preamble.
 samples_phzCorrected = samples.*exp(1i*-phzError); 
 
-scatterplot(samples_phzCorrected); title('Phase-corrected rx')
+% Normalize signal amplitude using preamble
+samples_phzCorrected = samples_phzCorrected./abs(samples(peak_idx));
+
+% Plot phase-corrected samples.
+figure
+hold on
+plot(samples_phzCorrected, 'ob'); title('Phase-corrected rx. Decision regions overlaid.')
+if length(constellation)>2
+    voronoi(real(constellation), imag(constellation))
+end
+hold off
 
 % Minimum euclidean distance. Unmap symbols to messages
 d = abs(repmat(samples_phzCorrected, 1, length(constellation)) - repmat(constellation, length(samples), 1)).^2; % Compute distance of every sample symbol to every constellation point.
