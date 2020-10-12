@@ -44,7 +44,7 @@ preamble_symbs = preamble; % Do NOT need to map to valid symbols
 %% Data source
 % b = randsrc(1,N,[0 1]); % Random message bits.
 
-string = 'SSY121 Group 7 says: The Capital Of Hawaii Is Honolulu.';
+string = 'ayy lmao';
 b = string2bitStream(string);
 b = [b zeros(1, 432-length(b))]; % Pad string with zeros to fill length 432 packet.
 disp(['Sent message: ' string])
